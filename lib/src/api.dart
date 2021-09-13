@@ -26,6 +26,6 @@ Future<bool> isFirstInstance([List<String>? args]) {
 /// ```dart
 /// onSecondInstance((List<String> args) => print("Arguments: $args"));
 /// ```
-void onSecondInstance(Function(List<String>) cb) {
+void onSecondInstance(Function(List) cb) {
   InstanceController.instance.callback = cb;
 }

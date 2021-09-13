@@ -4,8 +4,8 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:win32/win32.dart';
 import 'package:ffi/ffi.dart';
+import 'package:win32/win32.dart';
 
 import 'controller.dart';
 
@@ -15,30 +15,26 @@ const ERROR_PIPE_CONNECTED = 0x80070217;
 const ERROR_IO_PENDING = 0x800703E5;
 
 final _kernel32 = DynamicLibrary.open('kernel32.dll');
+
 int GetOverlappedResult(int hFile, Pointer<OVERLAPPED> lpOverlapped,
     Pointer<Uint32> lpNumberOfBytesTransferred, int bWait) {
   final fn = _kernel32.lookupFunction<
       Int32 Function(IntPtr hFile, Pointer<OVERLAPPED> lpOverlapped,
           Pointer<Uint32> lpNumberOfBytesTransferred, Uint32 bWait),
-      int Function(
-          int hFile,
-          Pointer<OVERLAPPED> lpOverlapped,
-          Pointer<Uint32> lpNumberOfBytesTransferred,
-          int bWait)>('GetOverlappedResult');
+      int Function(int hFile, Pointer<OVERLAPPED> lpOverlapped,
+          Pointer<Uint32> lpNumberOfBytesTransferred, int bWait)>('GetOverlappedResult');
   return fn(hFile, lpOverlapped, lpNumberOfBytesTransferred, bWait);
 }
 
 int CancelIo(int hFile) {
-  final fn = _kernel32.lookupFunction<Int32 Function(IntPtr hFile),
-      int Function(int hFile)>('CancelIo');
+  final fn =
+      _kernel32.lookupFunction<Int32 Function(IntPtr hFile), int Function(int hFile)>('CancelIo');
   return fn(hFile);
 }
 
 int GetNamedPipeClientProcessId(int hFile, Pointer<Uint32> clientProcessId) {
-  final fn = _kernel32.lookupFunction<
-      Int32 Function(IntPtr hFile, Pointer<Uint32> clientProcessId),
-      int Function(int hFile,
-          Pointer<Uint32> clientProcessId)>('GetNamedPipeClientProcessId');
+  final fn = _kernel32.lookupFunction<Int32 Function(IntPtr hFile, Pointer<Uint32> clientProcessId),
+      int Function(int hFile, Pointer<Uint32> clientProcessId)>('GetNamedPipeClientProcessId');
   return fn(hFile, clientProcessId);
 }
 
@@ -46,8 +42,7 @@ class InstanceControllerWindows extends InstanceController {
   final _handleKey = '$namespace:handle';
 
   @override
-  Future<bool> checkAndInitialize(String pipeName,
-      [List<String>? arguments]) async {
+  Future<bool> checkAndInitialize(String pipeName, [List<String>? arguments]) async {
     final filename = "\\\\.\\pipe\\__multi_instance_handler__$pipeName";
 
     final prevHandle = await _extractPrevHandle();
@@ -67,7 +62,7 @@ class InstanceControllerWindows extends InstanceController {
       if (msg is SendPort) {
         msg.send(pipe);
       } else {
-        channel.invokeMethod(onSecondInstanceMethodName, msg);
+        callback?.call(msg);
       }
     };
     final reader = ReceivePort()..listen(listenFn);
@@ -79,8 +74,7 @@ class InstanceControllerWindows extends InstanceController {
     final keys = prefs.getStringList(_handleKey);
     if (keys == null) return null;
 
-    final handles =
-        keys.map((k) => k.split(':').map((i) => int.parse(i))).toList();
+    final handles = keys.map((k) => k.split(':').map((i) => int.parse(i))).toList();
     final idx = handles.indexWhere((arr) => arr.first == pid);
     if (idx < 0) return null;
 
@@ -102,8 +96,7 @@ class InstanceControllerWindows extends InstanceController {
     final bytes = bytesString.toNativeUtf8();
     final numWritten = malloc<Uint32>();
     try {
-      final result =
-          WriteFile(pipe, bytes, bytesString.length, numWritten, nullptr);
+      final result = WriteFile(pipe, bytes, bytesString.length, numWritten, nullptr);
       if (result == 0) {
         throw _lastErrToString;
       }
@@ -115,8 +108,7 @@ class InstanceControllerWindows extends InstanceController {
   }
 
   static void _startReadPipeIsolate(SendPort writer) {
-    final reader = ReceivePort()
-      ..listen((msg) => {if (msg is int) _readPipe(writer, msg)});
+    final reader = ReceivePort()..listen((msg) => {if (msg is int) _readPipe(writer, msg)});
     writer.send(reader.sendPort);
   }
 
@@ -163,8 +155,7 @@ class InstanceControllerWindows extends InstanceController {
   static int _openPipe(String filename) {
     final cPipe = filename.toNativeUtf16();
     try {
-      return CreateFile(
-          cPipe, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0);
+      return CreateFile(cPipe, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0);
     } finally {
       free(cPipe);
     }
@@ -175,9 +166,7 @@ class InstanceControllerWindows extends InstanceController {
     try {
       return CreateNamedPipe(
         cPipe,
-        PIPE_ACCESS_DUPLEX |
-            FILE_FLAG_FIRST_PIPE_INSTANCE |
-            FILE_FLAG_OVERLAPPED,
+        PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
         PIPE_UNLIMITED_INSTANCES,
         4096,
@@ -193,16 +182,8 @@ class InstanceControllerWindows extends InstanceController {
   static String get _lastErrToString {
     Pointer<Utf16> errBuf = nullptr;
     try {
-      FormatMessage(
-          0x00000100 |
-              FORMAT_MESSAGE_FROM_SYSTEM |
-              FORMAT_MESSAGE_IGNORE_INSERTS,
-          nullptr,
-          GetLastError(),
-          0,
-          errBuf,
-          0,
-          nullptr);
+      FormatMessage(0x00000100 | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+          nullptr, GetLastError(), 0, errBuf, 0, nullptr);
       return errBuf.toDartString();
     } finally {
       free(errBuf);
